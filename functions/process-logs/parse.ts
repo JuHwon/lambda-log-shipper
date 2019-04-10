@@ -1,10 +1,11 @@
 import { CloudWatchLogsLogEvent } from 'aws-lambda'
+import { MetricDatum, Dimension } from 'aws-sdk/clients/cloudwatch'
 
 const pricePerGbSecond = 0.00001667
 
 let calCostForInvocation = function(memorySize, billedDuration) {
   let raw = pricePerGbSecond * (memorySize / 1024) * (billedDuration / 1000)
-  return raw.toFixed(9)
+  return Number(raw.toFixed(9))
 }
 
 // logGroup looks like this:
@@ -40,7 +41,14 @@ let parseFloatWith = (regex, input) => {
   return parseFloat(res[1])
 }
 
-let makeMetric = (value, unit, name, dimensions, namespace, timestamp?) => {
+let makeMetric = (
+  value: number,
+  unit: string,
+  name: string,
+  dimensions: Dimension[],
+  namespace: string,
+  timestamp?: any
+): MetricDatum & { Namespace: string } => {
   return {
     Value: value,
     Unit: toCamelCase(unit),
@@ -113,11 +121,11 @@ export const parseLogMessage = function(
   return log
 }
 
-let parseCustomMetric = function(
+const parseCustomMetric = (
   functionName: string,
   version: string,
   logEvent: CloudWatchLogsLogEvent
-) {
+): MetricDatum | null => {
   if (
     logEvent.message.startsWith('START RequestId') ||
     logEvent.message.startsWith('END RequestId') ||
@@ -182,7 +190,7 @@ const parseUsageMetrics = (
   functionName: string,
   version: string,
   logEvent: CloudWatchLogsLogEvent
-) => {
+): MetricDatum[] => {
   if (logEvent.message.startsWith('REPORT RequestId:')) {
     let parts = logEvent.message.split('\t', 5)
 
@@ -220,25 +228,22 @@ export const parseAll = (
   logStream: string,
   logEvents: CloudWatchLogsLogEvent[]
 ) => {
-  let lambdaVersion = parseLambdaVersion(logStream)
-  let functionName = parseFunctionName(logGroup)
+  const lambdaVersion = parseLambdaVersion(logStream)
+  const functionName = parseFunctionName(logGroup)
 
-  let logs = logEvents
+  const logs = logEvents
     .map(e =>
       parseLogMessage(logGroup, logStream, functionName, lambdaVersion, e)
     )
     .filter(log => log != null && log != undefined)
 
-  let customMetrics = logEvents
+  const customMetrics = logEvents
     .map(e => parseCustomMetric(functionName, lambdaVersion, e))
     .filter(metric => metric != null && metric != undefined)
 
-  let usageMetrics = logEvents
+  const usageMetrics = logEvents
     .map(e => parseUsageMetrics(functionName, lambdaVersion, e))
     .reduce((acc, metrics) => acc.concat(metrics), [])
-
-  console.log('logEvents: ', logEvents)
-  console.log('usageMetrics: ', usageMetrics)
 
   return { logs, customMetrics, usageMetrics }
 }

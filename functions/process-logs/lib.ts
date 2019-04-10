@@ -42,7 +42,7 @@ let publishMetrics = async metrics => {
     try {
       await cloudwatch.publish(datum, namespace)
     } catch (err) {
-      console.error('failed to publish metrics', err.message)
+      console.error('failed to publish metrics: ', err.message)
       console.error(JSON.stringify(datum))
     }
   }
@@ -55,7 +55,6 @@ export const processAll = async (
 ) => {
   const result = parseAll(logGroup, logStream, logEvents)
 
-  console.log('prased logs: ', result)
   if (result.logs) {
     await sendLogs(result.logs)
   }

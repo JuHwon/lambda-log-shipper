@@ -1,5 +1,5 @@
 import { CloudWatch } from 'aws-sdk'
-import { chunk } from 'lodash'
+import { chunk as chunkArray } from 'lodash'
 import { MetricDatum, PutMetricDataInput } from 'aws-sdk/clients/cloudwatch';
 
 const client = new CloudWatch()
@@ -16,9 +16,9 @@ const publish = async (metricDatum, namespace) => {
   })
 
   // cloudwatch only allows 20 metrics per request
-  let chunks: MetricDatum[][] = chunk(metricData, 20)
+  let chunks: MetricDatum[][] = chunkArray(metricData, 20)
 
-  for (let chunk of chunks) {
+  for (const chunk of chunks) {
     let req: PutMetricDataInput = {
       MetricData: chunk,
       Namespace: namespace,

@@ -5,7 +5,7 @@
   "main": "handler.js",
   "scripts": {
     "build": "webpack --config ./webpack.config.js",
-    "package": "npm run build && sam package --template-file template.yml --output-template-file packaged.yml --s3-bucket lambda-log-shipper-deploy",
+    "package": "npm run build && sam package --template-file template.yml --output-template-file packaged.yml --s3-bucket lambda-log-shipper-deployment",
     "publish": "sam publish --template packaged.yml --region eu-central-1"
   },
   "dependencies": {
