@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+
+Metadata:
+  AWS::ServerlessRepo::Application:
+    Name: logstash-log-shipper-and-cloudwatch-metrics
+    Description: Shipps logs to logstash and publishes cloudwatch metrics
+    Author: JuHwon
+    Labels: ['cloudwatch', 'logs', 'automation', 'ops', 'logstash']
+    LicenceUrl: ./LICENSE
+    ReadmeUrl: ./README.md
+    HomePageUrl: https://github.com/JuHwon/lambda-log-shipper
+    SemanticVersion: 1.0.0
+    SourceCodeUrl: https://github.com/JuHwon/lambda-log-shipper
+
+  
+Resources:
+  ProcessLogs:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: functions/process-logs/handler.handler
+      Runtime: nodejs8.10
+      Description: Ship logs to logstash and publish cloudwatch metrics
+      MemorySize: 128
+      Timeout: 10
+      CodeUri: .webpack
+    Environment:
+      Veriables:
+        LOGSTASH_HOST: !Ref LogstashHost
+        LOGSTASH_PORT: !Ref LogstashPort
+        LOGSTASH_TOKEN: !Ref LogstashToken
+    Policies:
+      - Statement:
+          Effect: "Allow"
+          Action: "cloudwatch:PutMetricData"
+          Resource: "*"
+
+Parameters:
+  LogstashHost:
+    Type: String
+    Description: >
+      Logstash Host
+  LogstashPort:
+    Type: String
+    Default: '5050'
+    Description: >
+      (Optional) if specified, will override the default logstash port (5050)
+  LogstashToken:
+    Type: String
+    Description: >
+      Token, which will be sent with logs to logstash
+    
