@@ -10,7 +10,7 @@ Metadata:
     LicenceUrl: ./LICENSE
     ReadmeUrl: ./README.md
     HomePageUrl: https://github.com/JuHwon/lambda-log-shipper
-    SemanticVersion: 1.1.2
+    SemanticVersion: 1.1.3
     SourceCodeUrl: https://github.com/JuHwon/lambda-log-shipper
 
 Parameters:

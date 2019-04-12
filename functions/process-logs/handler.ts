@@ -25,9 +25,13 @@ const getRecords = (event: any): CloudWatchLogsDecodedData[] => {
 
   // Kinesis Stream Event
   if (event.Records) {
-    return event.Records.filter(
-      record => record.eventSource === 'aws:kinesis'
-    ).map((record: KinesisStreamRecord) => parsePayload(record.kinesis))
+    return event.Records
+      .filter(record => record.eventSource === 'aws:kinesis')
+      .map((record: KinesisStreamRecord) => parsePayload(record.kinesis))
+      .filter(
+        (record: CloudWatchLogsDecodedData) =>
+          record.messageType === 'DATA_MESSAGE'
+      )
   }
 
   // Kinesis Firehose Event
