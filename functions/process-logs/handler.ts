@@ -1,16 +1,48 @@
-import { CloudWatchLogsHandler, CloudWatchLogsDecodedData } from 'aws-lambda';
-import { promisify } from 'util'
-import { gunzip } from 'zlib'
+import {
+  Handler,
+  CloudWatchLogsDecodedData,
+  FirehoseTransformationEvent,
+  KinesisStreamRecord,
+  CloudWatchLogsEvent,
+} from 'aws-lambda'
+import { gunzipSync } from 'zlib'
 import { processAll } from './lib'
 
-const gunzipAsync = promisify(gunzip)
+const parsePayload = (awslog: { data: string }) => {
+  const payload = new Buffer(awslog.data, 'base64')
+  const json = gunzipSync(payload).toString('utf8')
+  return JSON.parse(json) as CloudWatchLogsDecodedData
+}
 
-const handlerFunction: CloudWatchLogsHandler = async (event, _context) => {
+const isFirehoseTransformationEvent = (event: any) =>
+  event.records && event.deliveryStreamArn.startsWith('arn:aws:firehose:')
+
+const getRecords = (event: any): CloudWatchLogsDecodedData[] => {
+  // Cloudwatch Event
+  if (event.awslogs) {
+    return [parsePayload((event as CloudWatchLogsEvent).awslogs)]
+  }
+
+  // Kinesis Stream Event
+  if (event.Records) {
+    return event.Records.filter(
+      record => record.eventSource === 'aws:kinesis'
+    ).map((record: KinesisStreamRecord) => parsePayload(record.kinesis))
+  }
+
+  // Kinesis Firehose Event
+  if (isFirehoseTransformationEvent(event)) {
+    return (event as FirehoseTransformationEvent).records.map(parsePayload)
+  }
+
+  console.warn('No records to parse.')
+  return []
+}
+
+const handlerFunction: Handler = async (event, _context) => {
+  const records = getRecords(event)
 
   try {
-    let payload = new Buffer(event.awslogs.data, 'base64');
-    let json = ((await gunzipAsync(payload)) as any).toString('utf8');
-
     // once decoded, the CloudWatch invocation event looks like this:
     // {
     //     "messageType": "DATA_MESSAGE",
@@ -39,10 +71,14 @@ const handlerFunction: CloudWatchLogsHandler = async (event, _context) => {
     //     ]
     // }
 
-    let logEvent = JSON.parse(json) as CloudWatchLogsDecodedData
-    await processAll(logEvent.logGroup, logEvent.logStream, logEvent.logEvents);
+    for (const { logGroup, logStream, logEvents } of records) {
+      await processAll(logGroup, logStream, logEvents)
+      console.log(`Successfully processed ${logEvents.length} log events.`)
+    }
 
-    console.log(`Successfully processed ${logEvent.logEvents.length} log events.`)
+    if (isFirehoseTransformationEvent(event)) {
+      return { records }
+    }
     return
   } catch (error) {
     console.error('Error while shipping logs.', error)
@@ -51,4 +87,3 @@ const handlerFunction: CloudWatchLogsHandler = async (event, _context) => {
 }
 
 export const handler = handlerFunction
-

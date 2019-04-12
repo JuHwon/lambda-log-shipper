@@ -10,6 +10,10 @@ const port = Number(process.env.LOGSTASH_PORT)
 const token = process.env.LOGSTASH_TOKEN
 
 const sendLogs = async (logs: any[]) => {
+  if (!host) {
+    console.warn('No logstash host provided.')
+    return
+  }
   await new Promise((resolve, reject) => {
     let socket = connect(
       port,

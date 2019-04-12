@@ -10,9 +10,34 @@ Metadata:
     LicenceUrl: ./LICENSE
     ReadmeUrl: ./README.md
     HomePageUrl: https://github.com/JuHwon/lambda-log-shipper
-    SemanticVersion: 1.0.8
+    SemanticVersion: 1.1.2
     SourceCodeUrl: https://github.com/JuHwon/lambda-log-shipper
 
+Parameters:
+  LogstashHost:
+    Type: String
+    Description: >
+      Logstash Host
+  LogstashPort:
+    Type: String
+    Default: '5050'
+    Description: >
+      (Optional) if specified, will override the default logstash port (5050)
+  LogstashToken:
+    Type: String
+    Description: >
+      Token, which will be sent with logs to logstash
+  StreamName:
+    Type: String
+    Description: >
+      Kinesis Stream Name for KinesisStreamReadPolicy
+    
+
+Outputs:
+  LogProcessorFunctionArn:
+    Value: !GetAtt ProcessLogs.Arn
+  LogProcessorFunctionName:
+    Value: !Ref ProcessLogs
   
 Resources:
   ProcessLogs:
@@ -30,23 +55,10 @@ Resources:
           LOGSTASH_PORT: !Ref LogstashPort
           LOGSTASH_TOKEN: !Ref LogstashToken
       Policies:
+        - KinesisStreamReadPolicy:
+            StreamName: !Ref StreamName
         - Statement:
             Effect: "Allow"
             Action: "cloudwatch:PutMetricData"
             Resource: "*"
 
-Parameters:
-  LogstashHost:
-    Type: String
-    Description: >
-      Logstash Host
-  LogstashPort:
-    Type: String
-    Default: '5050'
-    Description: >
-      (Optional) if specified, will override the default logstash port (5050)
-  LogstashToken:
-    Type: String
-    Description: >
-      Token, which will be sent with logs to logstash
-    
