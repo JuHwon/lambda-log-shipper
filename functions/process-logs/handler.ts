@@ -11,13 +11,16 @@ import { processAll } from './lib'
 const parsePayload = (awslog: { data: string }) => {
   const payload = new Buffer(awslog.data, 'base64')
   const json = gunzipSync(payload).toString('utf8')
-  return JSON.parse(json) as CloudWatchLogsDecodedData
+  return {
+    ...awslog,
+    data: JSON.parse(json) as CloudWatchLogsDecodedData,
+  }
 }
 
 const isFirehoseTransformationEvent = (event: any) =>
   event.records && event.deliveryStreamArn.startsWith('arn:aws:firehose:')
 
-const getRecords = (event: any): CloudWatchLogsDecodedData[] => {
+const getRecords = (event: any): { data: CloudWatchLogsDecodedData }[] => {
   // Cloudwatch Event
   if (event.awslogs) {
     return [parsePayload((event as CloudWatchLogsEvent).awslogs)]
@@ -25,18 +28,16 @@ const getRecords = (event: any): CloudWatchLogsDecodedData[] => {
 
   // Kinesis Stream Event
   if (event.Records) {
-    return event.Records
-      .filter(record => record.eventSource === 'aws:kinesis')
+    return event.Records.filter(record => record.eventSource === 'aws:kinesis')
       .map((record: KinesisStreamRecord) => parsePayload(record.kinesis))
-      .filter(
-        (record: CloudWatchLogsDecodedData) =>
-          record.messageType === 'DATA_MESSAGE'
-      )
+      .filter(record => record.data.messageType === 'DATA_MESSAGE')
   }
 
   // Kinesis Firehose Event
   if (isFirehoseTransformationEvent(event)) {
-    return (event as FirehoseTransformationEvent).records.map(parsePayload)
+    return (event as FirehoseTransformationEvent).records
+      .map(parsePayload)
+      .filter(record => record.data.messageType === 'DATA_MESSAGE')
   }
 
   console.warn('No records to parse.')
@@ -74,14 +75,43 @@ const handlerFunction: Handler = async (event, _context) => {
     //         }
     //     ]
     // }
-
-    for (const { logGroup, logStream, logEvents } of records) {
-      await processAll(logGroup, logStream, logEvents)
+    for (const idx in records) {
+      const {
+        data: { logGroup, logStream, logEvents },
+      } = records[idx]
+      const { logs } = await processAll(logGroup, logStream, logEvents)
       console.log(`Successfully processed ${logEvents.length} log events.`)
+
+      records[idx].data.logEvents = logs
     }
 
     if (isFirehoseTransformationEvent(event)) {
-      return { records }
+      const transformedRecords = event.records.map(rec => {
+        const decodedRec = records.find(
+          (dr: any) => dr.recordId === rec.recordId
+        )
+        if (
+          decodedRec &&
+          decodedRec.data.logEvents &&
+          decodedRec.data.logEvents.length > 0
+        ) {
+          return {
+            recordId: rec.recordId,
+            result: 'Ok',
+            data: new Buffer(JSON.stringify(decodedRec.data)).toString(
+              'base64'
+            ),
+          }
+        } else {
+          return {
+            recordId: rec.recordId,
+            result: 'Dropped',
+            data: rec.data,
+          }
+        }
+      })
+
+      return { records: transformedRecords }
     }
     return
   } catch (error) {

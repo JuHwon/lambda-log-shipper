@@ -71,4 +71,5 @@ export const processAll = async (
     await publishMetrics(result.usageMetrics)
   }
 
+  return result
 }
